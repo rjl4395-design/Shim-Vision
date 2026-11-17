@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#151c1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Shim Vision">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Shim Vision</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+img,video{max-width:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+
+/* Layout: one-column instrument panel. Capture -> readout -> evidence images -> DFT -> log. */
+:root{
+  --bg:#eceeeb; --panel:#fbfbfa; --ink:#1b2220; --muted:#5a6560; --line:#d3d9d5;
+  --brass:#9a6f14; --brass-soft:#f1e5c6; --teal:#0f7d86; --teal-soft:#d6eef0;
+  --ok:#2c7448; --ok-soft:#dcefe2; --warn:#965400; --warn-soft:#f8e8cf; --bad:#a8342a; --bad-soft:#f6dcd8;
+  --display:#151c1a; --display-fg:#e7efe9; --display-dim:#8fa49a;
+  --sans:"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121615; --panel:#1b211f; --ink:#e4ebe7; --muted:#9aa8a1; --line:#2e3834;
+  --brass:#d8a945; --brass-soft:#3a2f17; --teal:#4cc3cc; --teal-soft:#123438;
+  --ok:#6fcb92; --ok-soft:#173726; --warn:#e7a94a; --warn-soft:#3b2a12; --bad:#ef8a7f; --bad-soft:#3e1d19;
+  --display:#0b0f0e; --display-fg:#e7efe9; --display-dim:#7d9188; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#121615; --panel:#1b211f; --ink:#e4ebe7; --muted:#9aa8a1; --line:#2e3834;
+  --brass:#d8a945; --brass-soft:#3a2f17; --teal:#4cc3cc; --teal-soft:#123438;
+  --ok:#6fcb92; --ok-soft:#173726; --warn:#e7a94a; --warn-soft:#3b2a12; --bad:#ef8a7f; --bad-soft:#3e1d19;
+  --display:#0b0f0e; --display-fg:#e7efe9; --display-dim:#7d9188; color-scheme:dark }
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);font-size:15px;line-height:1.5;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:1.45rem;margin:0;font-weight:600;letter-spacing:-.01em}
+h1 span{color:var(--brass)}
+h2{font-size:.78rem;margin:0;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sub{color:var(--muted);font-size:.86rem;margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.capture{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-weight:600;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.btn.primary{background:var(--brass);border-color:var(--brass);color:#fff;font-size:1.05rem;padding:14px 22px}
+:root[data-theme="dark"] .btn.primary{color:#1b1505}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .btn.primary{color:#1b1505} }
+.btn:disabled{opacity:.5;cursor:default}
+.btn.small{padding:6px 10px;font-size:.82rem;font-weight:500}
+.status{font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+.readout{background:var(--display);color:var(--display-fg);border-radius:10px;padding:16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.readout .cell{display:flex;flex-direction:column;gap:2px;min-width:0}
+.readout .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--display-dim)}
+.readout .v{font-family:var(--mono);font-size:1.45rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.readout .v small{font-size:.75rem;color:var(--display-dim);margin-left:4px}
+.readout .main .v{font-size:2.1rem;color:#f3c75f}
+.readout .note{grid-column:1/-1;font-size:.78rem;color:var(--display-dim);font-family:var(--mono)}
+@media (max-width:620px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}.readout .main{grid-column:1/-1}}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:.78rem;padding:4px 9px;border-radius:999px;border:1px solid transparent}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.views{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:620px){.views{grid-template-columns:minmax(0,1fr)}}
+figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+figure canvas{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:var(--bg);display:block}
+figcaption{font-size:.78rem;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
+input,select{font:inherit;font-family:var(--mono);font-size:.95rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 9px;min-width:0;width:100%;box-sizing:border-box}
+input.auto{background:var(--teal-soft);border-color:transparent}
+.dft{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;font-family:var(--mono)}
+.dft .big{font-size:1.9rem;color:var(--brass);font-variant-numeric:tabular-nums}
+.dft .meta{font-size:.82rem;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
+td:first-child,th:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+td{font-family:var(--mono)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+details summary{cursor:pointer;font-weight:600;font-size:.88rem}
+details p,details li{font-size:.85rem;color:var(--muted)}
+.hint{font-size:.8rem;color:var(--muted);margin:0}
+#liveBox video{width:100%;border-radius:8px;border:1px solid var(--line);background:#000;display:block}
+#liveBox{display:flex;flex-direction:column;gap:6px}
+.sample-tag{font-size:.72rem;background:var(--brass-soft);color:var(--brass);padding:3px 8px;border-radius:999px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Shim <span>Vision</span></h1>
+      <p class="sub">Painted-area gauge for 0.003" brass DFT shims. Uses the shim's own size as the ruler.</p>
+    </div>
+    <span id="sampleTag" class="sample-tag">Sample image loaded</span>
+  </header>
+
+  <section class="panel">
+    <div class="capture">
+      <label class="btn primary" for="cam" style="flex-direction:row;color:inherit">◉ Measure shim
+        <input id="cam" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn" for="pick" style="flex-direction:row">Use a saved photo
+        <input id="pick" type="file" accept="image/*" hidden>
+      </label>
+      <button class="btn" id="liveBtn" type="button">● Live auto-measure</button>
+      <span id="status" class="status">Ready</span>
+    </div>
+    <div id="liveBox" hidden><video id="video" playsinline muted autoplay></video><p id="liveMsg" class="status">Starting camera…</p></div>
+    <p class="hint">Live mode measures on its own when a shim is placed and held still, then waits for the next one. <b>Measure shim</b> takes a full-resolution photo instead.</p>
+    <p class="hint" hidden>Put the shim in the mount, tap <b>Measure shim</b>, take the photo. Detection, perspective correction and paint/brass separation run automatically.</p>
+  </section>
+
+  <section class="readout" aria-live="polite">
+    <div class="cell main"><span class="k">Painted area</span><span class="v" id="rArea">—</span></div>
+    <div class="cell"><span class="k">Painted length</span><span class="v" id="rL">—</span></div>
+    <div class="cell"><span class="k">Width (for calculator)</span><span class="v" id="rW">—</span></div>
+    <div class="cell"><span class="k">Resolution</span><span class="v" id="rRes">—</span></div>
+    <div class="note" id="rNote">Width (for calculator) = area ÷ length, so L × W in the Quick Calculator equals the measured area, ragged tape edge included.</div>
+  </section>
+
+  <div class="chips" id="chips"></div>
+
+  <section class="views">
+    <figure><canvas id="cvSrc" width="600" height="450"></canvas><figcaption>Detected shim outline and corners</figcaption></figure>
+    <figure><canvas id="cvRect" width="600" height="251"></canvas><figcaption>Straightened shim. Teal = counted as paint</figcaption></figure>
+  </section>
+
+  <section class="panel">
+    <h2>Dry film thickness</h2>
+    <div class="grid">
+      <label for="color">Color<select id="color"></select></label>
+      <label for="wpg">Wet density W (lb/gal)<input id="wpg" type="number" step="0.01" inputmode="decimal"></label>
+      <label for="sol">% solids S<input id="sol" type="number" step="0.1" inputmode="decimal"></label>
+      <label for="bare">Bare shim weight (g), blank = calculated<input id="bare" type="number" step="0.0001" inputmode="decimal" placeholder="calculated"></label>
+      <label for="painted">Shim + dry paint (g)<input id="painted" type="number" step="0.0001" inputmode="decimal" placeholder="6.7200"></label>
+      <label for="mic">Micrometer avg (mils), optional<input id="mic" type="number" step="0.01" inputmode="decimal"></label>
+    </div>
+    <div class="dft">
+      <span class="big" id="dftOut">— mils</span>
+      <span class="meta" id="dftMeta">Enter both weights to calculate.</span>
+    </div>
+    <div class="row">
+      <label for="shimId" style="flex:1 1 160px">Shim ID / note<input id="shimId" type="text" placeholder="A-lane board 3"></label>
+      <button class="btn" id="addLog" type="button" disabled>Add to log</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="row" style="justify-content:space-between">
+      <h2>Log (this phone)</h2>
+      <div class="row">
+        <button class="btn small" id="copyAll" type="button">Copy all for Excel</button>
+        <button class="btn small" id="dlCsv" type="button" hidden>Download CSV</button>
+        <button class="btn small" id="clearLog" type="button">Clear</button>
+      </div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Time</th><th>Color / ID</th><th>Area in²</th><th>L in</th><th>W in</th><th>Paint g</th><th>DFT wt</th><th>Mic</th><th>Mic−Wt</th><th></th></tr></thead>
+      <tbody id="logBody"><tr><td colspan="10" style="text-align:left;color:var(--muted);font-family:var(--sans)">No shims logged yet. Measure a shim, enter its weights, then tap Add to log.</td></tr></tbody>
+    </table></div>
+    <p class="hint" id="clearConfirm" hidden></p>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Settings and mount setup</summary>
+      <div class="grid" style="margin-top:10px">
+        <label for="shimL">Shim length (in)<input id="shimL" type="number" step="0.001" value="6.000"></label>
+        <label for="shimW">Shim width (in)<input id="shimW" type="number" step="0.001" value="2.510"></label>
+        <label for="ppiIn">Analysis resolution (px/in)<input id="ppiIn" type="number" step="10" value="250"></label>
+        <label for="shimT">Shim thickness (in)<input id="shimT" type="number" step="0.0001" value="0.0030"></label>
+        <label for="useJig" style="flex-direction:row;align-items:center;gap:8px;grid-column:1/-1"><input id="useJig" type="checkbox" checked style="width:auto"> Use jig reference dots for scale (measures each shim's real size)</label>
+        <label for="dotX">Jig dot spacing, long (in)<input id="dotX" type="number" step="0.001" value="7.000"></label>
+        <label for="dotY">Jig dot spacing, short (in)<input id="dotY" type="number" step="0.001" value="3.500"></label>
+      </div>
+      <ul>
+        <li>The shim's length and width set the scale. Measure a batch with calipers and enter the true size; a 0.01" error here is a 0.2% area error.</li>
+        <li>Mount the phone parallel to the shim on the 1× lens, about 8 to 9 in above it, with the shim's long side along the phone's long side. Turn off flash, portrait mode and macro auto-switch.</li>
+        <li>Use a matte background that is not yellow, tan or wood (mid-gray or blue works). Light it with diffuse light so the brass does not glare.</li>
+        <li>Keep the whole shim in frame and flat. Nothing may cover its outer edge.</li>
+      </ul>
+    </details>
+  </section>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const showErr = msg => { try { $("status").textContent = msg; const c = $("chips"); c.textContent = ""; const s = document.createElement("span"); s.className = "chip bad"; s.textContent = msg; c.appendChild(s); } catch (e) {} };
+window.addEventListener("error", e => showErr("Error: " + (e.message || "unknown")));
+window.addEventListener("unhandledrejection", e => showErr("Error: " + ((e.reason && e.reason.message) || e.reason || "unknown")));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- color table (W lb/gal, S % solids). Edit in the page; saved on this phone. ---------- */
+const COLORS_DEFAULT = [
+  ["Snowscape White",11.23,59],["Midnight Shadow",10.50,55],["Abyss Black",10.35,null],["Cavern Steel",10.61,null],
+  ["Quarry Gray",10.93,null],["Sand Dunes",10.98,null],["Desert Stone",10.96,null],["Terra Brown",10.67,null],
+  ["Prairie Clay",10.68,null],["Timberland Suede",10.72,null],["Tundra Gray",10.69,null],["Summit Blue",10.75,null],
+  ["Rapids Blue",10.42,null],["Redwood Red",10.09,null],["Harvest Honey",10.92,null],["Garden Sage",10.43,null]
+];
+const colorVals = store.get("sv_colors", {});
+const sel = $("color");
+COLORS_DEFAULT.forEach(([n]) => { const o = document.createElement("option"); o.textContent = n; sel.appendChild(o); });
+sel.value = store.get("sv_lastColor", "Snowscape White");
+function loadColor(){
+  const n = sel.value, def = COLORS_DEFAULT.find(c => c[0] === n) || [n, null, null];
+  const v = colorVals[n] || {};
+  $("wpg").value = v.w ?? def[1] ?? ""; $("sol").value = v.s ?? def[2] ?? "";
+}
+loadColor();
+sel.addEventListener("change", () => { store.set("sv_lastColor", sel.value); loadColor(); calcDFT(); });
+["wpg","sol"].forEach(id => $(id).addEventListener("input", () => {
+  colorVals[sel.value] = { w: parseFloat($("wpg").value) || null, s: parseFloat($("sol").value) || null };
+  store.set("sv_colors", colorVals); calcDFT();
+}));
+["bare","painted","mic"].forEach(id => $(id).addEventListener("input", calcDFT));
+
+const settings = store.get("sv_settings", { L: 6.000, W: 2.510, ppi: 250 });
+settings.T = settings.T || 0.003;
+if (settings.useJig === undefined) settings.useJig = true;
+settings.DX = settings.DX || 7.0; settings.DY = settings.DY || 3.5;
+$("useJig").checked = settings.useJig; $("dotX").value = settings.DX.toFixed(3); $("dotY").value = settings.DY.toFixed(3);
+["useJig","dotX","dotY"].forEach(id => $(id).addEventListener("change", () => {
+  settings.useJig = $("useJig").checked; settings.DX = parseFloat($("dotX").value) || 7; settings.DY = parseFloat($("dotY").value) || 3.5;
+  store.set("sv_settings", settings); if (lastSource) measure(lastSource, lastLabel);
+}));
+$("shimT").value = settings.T.toFixed(4);
+$("shimT").addEventListener("change", () => { settings.T = parseFloat($("shimT").value) || 0.003; store.set("sv_settings", settings); calcDFT(); });
+$("shimL").value = settings.L.toFixed(3); $("shimW").value = settings.W.toFixed(3); $("ppiIn").value = settings.ppi;
+["shimL","shimW","ppiIn"].forEach(id => $(id).addEventListener("change", () => {
+  settings.L = parseFloat($("shimL").value) || 6; settings.W = parseFloat($("shimW").value) || 2.51;
+  settings.ppi = Math.min(400, Math.max(120, parseFloat($("ppiIn").value) || 250));
+  store.set("sv_settings", settings);
+  if (lastSource) measure(lastSource, lastLabel);
+}));
+
+/* ---------- color math ---------- */
+const LIN = new Float32Array(256);
+for (let i = 0; i < 256; i++){ const c = i / 255; LIN[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+const fLab = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+function lab(r, g, b, out, o){
+  const R = LIN[r], G = LIN[g], B = LIN[b];
+  const X = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047, Y = 0.2126 * R + 0.7152 * G + 0.0722 * B, Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+  const fx = fLab(X), fy = fLab(Y), fz = fLab(Z);
+  out[o] = 116 * fy - 16; out[o + 1] = 500 * (fx - fy); out[o + 2] = 200 * (fy - fz);
+}
+function isBrassPrior(r, g, b){
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (mx < 60 || d < 0.2 * mx) return false;
+  let h; if (mx === r) h = 60 * (((g - b) / d) % 6); else if (mx === g) h = 60 * ((b - r) / d + 2); else h = 60 * ((r - g) / d + 4);
+  if (h < 0) h += 360;
+  return h >= 20 && h <= 68;
+}
+
+/* ---------- raster helpers ---------- */
+function toImage(src, maxSide){
+  const sw = src.width, sh = src.height, k = Math.min(1, maxSide / Math.max(sw, sh));
+  const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true }); x.imageSmoothingQuality = "high"; x.drawImage(src, 0, 0, w, h);
+  return { canvas: c, w, h, d: x.getImageData(0, 0, w, h).data };
+}
+function morph(m, w, h, r, grow){
+  let a = m, tmp = new Uint8Array(m.length), out = new Uint8Array(m.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = grow ? 0 : 1;
+    for (let k = -r; k <= r; k++){ const xx = x + k; const p = (xx < 0 || xx >= w) ? (grow ? 0 : 0) : a[y * w + xx]; if (grow ? p : !p){ v = grow ? 1 : 0; break; } }
+    tmp[y * w + x] = v;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    let v = grow ? 0 : 1;
+    for (let k = -r; k <= r; k++){ const yy = y + k; const p = (yy < 0 || yy >= h) ? 0 : tmp[yy * w + x]; if (grow ? p : !p){ v = grow ? 1 : 0; break; } }
+    out[y * w + x] = v;
+  }
+  return out;
+}
+function largestComponent(m, w, h){
+  const labl = new Int32Array(w * h), q = new Int32Array(w * h);
+  let id = 0, best = 0, bestId = 0;
+  for (let i = 0; i < m.length; i++){
+    if (!m[i] || labl[i]) continue;
+    id++; let head = 0, tail = 0, n = 0; q[tail++] = i; labl[i] = id;
+    while (head < tail){
+      const p = q[head++]; n++; const x = p % w, y = (p / w) | 0;
+      if (x > 0 && m[p - 1] && !labl[p - 1]){ labl[p - 1] = id; q[tail++] = p - 1; }
+      if (x < w - 1 && m[p + 1] && !labl[p + 1]){ labl[p + 1] = id; q[tail++] = p + 1; }
+      if (y > 0 && m[p - w] && !labl[p - w]){ labl[p - w] = id; q[tail++] = p - w; }
+      if (y < h - 1 && m[p + w] && !labl[p + w]){ labl[p + w] = id; q[tail++] = p + w; }
+    }
+    if (n > best){ best = n; bestId = id; }
+  }
+  const out = new Uint8Array(w * h);
+  if (bestId) for (let i = 0; i < out.length; i++) out[i] = labl[i] === bestId ? 1 : 0;
+  return { mask: out, count: best };
+}
+function fillHoles(m, w, h){
+  const ext = new Uint8Array(w * h), q = new Int32Array(w * h); let t = 0, hd = 0;
+  const push = p => { if (!m[p] && !ext[p]){ ext[p] = 1; q[t++] = p; } };
+  for (let x = 0; x < w; x++){ push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++){ push(y * w); push(y * w + w - 1); }
+  while (hd < t){ const p = q[hd++], x = p % w, y = (p / w) | 0;
+    if (x > 0) push(p - 1); if (x < w - 1) push(p + 1); if (y > 0) push(p - w); if (y < h - 1) push(p + w); }
+  const out = new Uint8Array(w * h); for (let i = 0; i < out.length; i++) out[i] = ext[i] ? 0 : 1;
+  return out;
+}
+function bilinear(img, x, y, o){
+  const w = img.w, h = img.h, d = img.d;
+  if (x < 0) x = 0; if (y < 0) y = 0; if (x > w - 1.001) x = w - 1.001; if (y > h - 1.001) y = h - 1.001;
+  const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = (y0 * w + x0) * 4, j = i + w * 4;
+  for (let c = 0; c < 3; c++){
+    o[c] = (d[i + c] * (1 - fx) + d[i + 4 + c] * fx) * (1 - fy) + (d[j + c] * (1 - fx) + d[j + 4 + c] * fx) * fy;
+  }
+}
+function fitLine(pts){
+  let mx = 0, my = 0; for (const p of pts){ mx += p[0]; my += p[1]; } mx /= pts.length; my /= pts.length;
+  let sxx = 0, syy = 0, sxy = 0; for (const p of pts){ const dx = p[0] - mx, dy = p[1] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+  const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), dx = Math.cos(th), dy = Math.sin(th);
+  let ss = 0; for (const p of pts){ const r = -(p[0] - mx) * dy + (p[1] - my) * dx; ss += r * r; }
+  return { mx, my, dx, dy, rms: Math.sqrt(ss / pts.length) };
+}
+function intersect(a, b){
+  const det = a.dx * (-b.dy) - a.dy * (-b.dx);
+  if (Math.abs(det) < 1e-9) return null;
+  const rx = b.mx - a.mx, ry = b.my - a.my, t = (rx * (-b.dy) - ry * (-b.dx)) / det;
+  return [a.mx + t * a.dx, a.my + t * a.dy];
+}
+function homography(src, dst){
+  const A = [], B = [];
+  for (let i = 0; i < 4; i++){
+    const [x, y] = src[i], [X, Y] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -x * X, -y * X]); B.push(X);
+    A.push([0, 0, 0, x, y, 1, -x * Y, -y * Y]); B.push(Y);
+  }
+  for (let c = 0; c < 8; c++){
+    let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [B[c], B[p]] = [B[p], B[c]];
+    for (let r = 0; r < 8; r++){ if (r === c) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; B[r] -= f * B[c]; }
+  }
+  const h = B.map((v, i) => v / A[i][i]); h.push(1); return h;
+}
+
+/* ---------- jig reference dots ---------- */
+function findDots(small, work, shim, mx, my, ct, st, su, gm){
+  const w = small.w, h = small.h, n = w * h, d = small.d;
+  const Y = i => 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const bgY = 0.299 * gm[0] + 0.587 * gm[1] + 0.114 * gm[2];
+  const near = morph(shim, w, h, 4, true);
+  const dark = new Uint8Array(n);
+  // dark plate (e.g. black PLA) uses light dots; light plate uses dark dots
+  const lightDots = bgY < 90;
+  for (let i = 0; i < n; i++) dark[i] = !near[i] && (lightDots ? Y(i) > bgY + 0.45 * (255 - bgY) : Y(i) < 0.55 * bgY) ? 1 : 0;
+  // all components with stats
+  const lab = new Int32Array(n), q = new Int32Array(n), blobs = []; let id = 0;
+  for (let i = 0; i < n; i++){
+    if (!dark[i] || lab[i]) continue;
+    id++; let hd = 0, tl = 0, cnt = 0, sx = 0, sy = 0, x0 = w, x1 = 0, y0 = h, y1 = 0, edge = false; q[tl++] = i; lab[i] = id;
+    while (hd < tl){
+      const p = q[hd++], x = p % w, y = (p / w) | 0; cnt++; sx += x; sy += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+      for (const np of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1])
+        if (np >= 0 && dark[np] && !lab[np]){ lab[np] = id; q[tl++] = np; }
+    }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    blobs.push({ cnt, cx: sx / cnt, cy: sy / cnt, bw, bh, edge });
+  }
+  const ppiS = 2 * su / 6.0, dExp = 0.25 * ppiS, aExp = Math.PI / 4 * dExp * dExp;
+  const cand = blobs.filter(b => !b.edge && b.cnt > 0.25 * aExp && b.cnt < 3.5 * aExp && b.bw / b.bh > 0.6 && b.bw / b.bh < 1.67 && b.cnt / (b.bw * b.bh) > 0.55);
+  const signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]], pick = [];
+  for (const [a, b] of signs){
+    const eu = a * settings.DX / 2 * ppiS, ev = b * settings.DY / 2 * ppiS;
+    let best = null, bd = 1.0 * ppiS;
+    for (const c of cand){
+      const dx = c.cx - mx, dy = c.cy - my, u = dx * ct + dy * st, v = -dx * st + dy * ct, dd = Math.hypot(u - eu, v - ev);
+      if (dd < bd){ bd = dd; best = c; }
+    }
+    if (!best) return { dots: null, why: `Jig dots not found (${cand.length} dot-like marks seen). Using the entered shim size.` };
+    pick.push(best);
+  }
+  // sub-pixel centroid of each dot on the full-resolution image
+  const K = work.w / w, wd = work.d, W = work.w;
+  const out = pick.map(b => {
+    const cx = (b.cx + 0.5) * K - 0.5, cy = (b.cy + 0.5) * K - 0.5, R = Math.ceil(0.35 * ppiS * K);
+    const vals = [];
+    for (let y = Math.max(0, Math.round(cy - R)); y <= Math.min(work.h - 1, Math.round(cy + R)); y++)
+      for (let x = Math.max(0, Math.round(cx - R)); x <= Math.min(W - 1, Math.round(cx + R)); x++){ const o = (y * W + x) * 4; vals.push([x, y, 0.299 * wd[o] + 0.587 * wd[o + 1] + 0.114 * wd[o + 2]]); }
+    const ys = vals.map(v => v[2]).sort((a, b) => a - b), lo = ys[Math.floor(ys.length * (lightDots ? 0.1 : 0.05))], hi = ys[Math.floor(ys.length * (lightDots ? 0.95 : 0.9))], thr = (lo + hi) / 2;
+    let sw = 0, sx = 0, sy = 0;
+    for (const [x, y, v] of vals){ const wt = Math.max(0, lightDots ? v - thr : thr - v); sw += wt; sx += wt * x; sy += wt * y; }
+    return [sx / sw, sy / sw];
+  });
+  return { dots: out };
+}
+
+/* ---------- analysis ---------- */
+function analyze(src){
+  const t0 = performance.now();
+  const small = toImage(src, 640), work = toImage(src, 2400);
+  const sw = small.w, sh = small.h, n = sw * sh;
+
+  // 1. find the brass shim
+  let brass = new Uint8Array(n);
+  for (let i = 0; i < n; i++){ const o = i * 4; brass[i] = isBrassPrior(small.d[o], small.d[o + 1], small.d[o + 2]) ? 1 : 0; }
+  brass = morph(morph(brass, sw, sh, 2, true), sw, sh, 2, false);
+  const comp = largestComponent(brass, sw, sh);
+  if (comp.count < n * 0.02) throw new Error("No shim found. Keep the whole shim in frame on a background that is not yellow, tan or wood.");
+  const shim = fillHoles(comp.mask, sw, sh);
+  let touches = false;
+  for (let x = 0; x < sw; x++) if (shim[x] || shim[(sh - 1) * sw + x]) touches = true;
+  for (let y = 0; y < sh; y++) if (shim[y * sw] || shim[y * sw + sw - 1]) touches = true;
+  if (touches) throw new Error("The shim runs off the edge of the photo. Move the phone so the whole shim is in frame.");
+
+  // color models: brass (component pixels) and background (ring around shim)
+  const ring = morph(shim, sw, sh, 12, true);
+  const bm = [0, 0, 0], gm = [0, 0, 0]; let bn = 0, gn = 0, mx = 0, my = 0, cnt = 0;
+  for (let i = 0; i < n; i++){
+    const o = i * 4;
+    if (comp.mask[i]){ bm[0] += small.d[o]; bm[1] += small.d[o + 1]; bm[2] += small.d[o + 2]; bn++; }
+    else if (ring[i] && !shim[i]){ gm[0] += small.d[o]; gm[1] += small.d[o + 1]; gm[2] += small.d[o + 2]; gn++; }
+    if (shim[i]){ mx += i % sw; my += (i / sw) | 0; cnt++; }
+  }
+  bm.forEach((v, k) => bm[k] = v / bn); gm.forEach((v, k) => gm[k] = v / Math.max(1, gn));
+  mx /= cnt; my /= cnt;
+
+  // 2. rough corners from principal axes
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < n; i++) if (shim[i]){ const dx = i % sw - mx, dy = ((i / sw) | 0) - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+  const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), ct = Math.cos(th), st = Math.sin(th);
+  let su = 0, sv = 0;
+  for (let i = 0; i < n; i++) if (shim[i]){ const dx = i % sw - mx, dy = ((i / sw) | 0) - my; su = Math.max(su, Math.abs(dx * ct + dy * st)); sv = Math.max(sv, Math.abs(-dx * st + dy * ct)); }
+  const signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]], rough = signs.map(() => [0, 0]), bestS = [-1e9, -1e9, -1e9, -1e9];
+  for (let i = 0; i < n; i++) if (shim[i]){
+    const x = i % sw, y = (i / sw) | 0, dx = x - mx, dy = y - my, u = dx * ct + dy * st, v = -dx * st + dy * ct;
+    for (let k = 0; k < 4; k++){ const s = signs[k][0] * u / su + signs[k][1] * v / sv; if (s > bestS[k]){ bestS[k] = s; rough[k] = [x, y]; } }
+  }
+
+  // 3. refine each edge on the full-resolution image (sub-pixel)
+  const K = work.w / sw, cx = mx * K, cy = my * K;
+  const P = rough.map(p => [(p[0] + 0.5) * K - 0.5, (p[1] + 0.5) * K - 0.5]);
+  const dv = [bm[0] - gm[0], bm[1] - gm[1], bm[2] - gm[2]], den = dv[0] ** 2 + dv[1] ** 2 + dv[2] ** 2;
+  if (den < 200) throw new Error("The background is too close to the brass color. Use a gray or blue background.");
+  // edge score: yellowness ((R+G)/2 - B). Brass stays yellow under glare and shadow; gray or blue backgrounds do not.
+  const yel = c => (c[0] + c[1]) / 2 - c[2], yB = yel(bm), yG = yel(gm);
+  const tv = (yB - yG) > 20 ? (c => (yel(c) - yG) / (yB - yG))
+    : (c => ((c[0] - gm[0]) * dv[0] + (c[1] - gm[1]) * dv[1] + (c[2] - gm[2]) * dv[2]) / den);
+  const lines = [], col = [0, 0, 0], R = Math.max(8, 4 * K);
+  for (let s = 0; s < 4; s++){
+    const a = P[s], b = P[(s + 1) % 4], ex = b[0] - a[0], ey = b[1] - a[1], len = Math.hypot(ex, ey);
+    let nx = -ey / len, ny = ex / len;
+    const midx = (a[0] + b[0]) / 2, midy = (a[1] + b[1]) / 2;
+    if ((midx - cx) * nx + (midy - cy) * ny < 0){ nx = -nx; ny = -ny; }
+    let pts = [];
+    for (let k = 0; k <= 120; k++){
+      const t = 0.1 + 0.8 * k / 120, bx = a[0] + t * ex, by = a[1] + t * ey;
+      let prev = null, found = null;
+      for (let o = -R; o <= R; o += 0.5){
+        bilinear(work, bx + o * nx, by + o * ny, col); const v = tv(col);
+        if (prev !== null && prev >= 0.5 && v < 0.5){ const f = (prev - 0.5) / (prev - v); const so = o - 0.5 + f * 0.5; if (found === null || Math.abs(so) < Math.abs(found)) found = so; }
+        prev = v;
+      }
+      if (found !== null) pts.push([bx + found * nx, by + found * ny]);
+    }
+    if (pts.length < 20) throw new Error("Could not find a clean shim edge. Check that the shim is flat and nothing covers its edge.");
+    let L = fitLine(pts);
+    for (let it = 0; it < 2; it++){
+      const tol = Math.max(1.0, 2.5 * L.rms);
+      const kept = pts.filter(p => Math.abs(-(p[0] - L.mx) * L.dy + (p[1] - L.my) * L.dx) <= tol);
+      if (kept.length >= 20){ pts = kept; L = fitLine(pts); }
+    }
+    L.n = pts.length; lines.push(L);
+  }
+  let C = [];
+  for (let s = 0; s < 4; s++){ const p = intersect(lines[(s + 3) % 4], lines[s]); if (!p) throw new Error("Shim edges did not form a rectangle."); C.push(p); }
+  const side = i => Math.hypot(C[(i + 1) % 4][0] - C[i][0], C[(i + 1) % 4][1] - C[i][1]);
+  if (side(0) + side(2) < side(1) + side(3)) C = [C[1], C[2], C[3], C[0]];
+  const longPx = (side(0) + side(2)) / 2, shortPx = (side(1) + side(3)) / 2;
+  // 3b. scale: jig reference dots if found, otherwise the entered shim size
+  let shimL = settings.L, shimW = settings.W, scaleSrc = "shim", dots = null, dotMiss = "";
+  if (settings.useJig){
+    const r = findDots(small, work, shim, mx, my, ct, st, su, gm);
+    if (r.dots){
+      const Hd = homography(r.dots, [[-settings.DX / 2, -settings.DY / 2], [settings.DX / 2, -settings.DY / 2], [settings.DX / 2, settings.DY / 2], [-settings.DX / 2, settings.DY / 2]]);
+      const tf = p => { const w = Hd[6] * p[0] + Hd[7] * p[1] + 1; return [(Hd[0] * p[0] + Hd[1] * p[1] + Hd[2]) / w, (Hd[3] * p[0] + Hd[4] * p[1] + Hd[5]) / w]; };
+      const Ci = C.map(tf), d = (a, b) => Math.hypot(Ci[b][0] - Ci[a][0], Ci[b][1] - Ci[a][1]);
+      shimL = (d(0, 1) + d(2, 3)) / 2; shimW = (d(1, 2) + d(3, 0)) / 2; scaleSrc = "jig"; dots = r.dots;
+    } else dotMiss = r.why;
+  }
+  const aspectErr = scaleSrc === "jig" ? 0 : (longPx / shortPx) / (settings.L / settings.W) - 1;
+
+  // 4. straighten
+  const ppi = settings.ppi, Wr = Math.round(shimL * ppi), Hr = Math.round(shimW * ppi);
+  const H = homography([[0, 0], [Wr, 0], [Wr, Hr], [0, Hr]], C);
+  const N = Wr * Hr, rgb = new Uint8ClampedArray(N * 4), L3 = new Float32Array(N * 3);
+  for (let v = 0; v < Hr; v++) for (let u = 0; u < Wr; u++){
+    const uu = u + 0.5, vv = v + 0.5, ww = H[6] * uu + H[7] * vv + 1;
+    bilinear(work, (H[0] * uu + H[1] * vv + H[2]) / ww, (H[3] * uu + H[4] * vv + H[5]) / ww, col);
+    const i = v * Wr + u, o = i * 4;
+    rgb[o] = col[0]; rgb[o + 1] = col[1]; rgb[o + 2] = col[2]; rgb[o + 3] = 255;
+    lab(rgb[o], rgb[o + 1], rgb[o + 2], L3, i * 3);
+    // brightness-normalized tint: brass stays yellow in shadow, black paint has no tint
+    const Lv = L3[i * 3], dn = Math.max(Lv, 25);
+    L3[i * 3] = 0.5 * Lv; L3[i * 3 + 1] = 100 * L3[i * 3 + 1] / dn; L3[i * 3 + 2] = 100 * L3[i * 3 + 2] / dn;
+  }
+
+  // 5. self-calibrating 2-class separation: outer band = brass, center = paint
+  const edgeDist = (u, v) => Math.min(u + 0.5, Wr - u - 0.5, v + 0.5, Hr - v - 0.5) / ppi;
+  const med = arr => { arr.sort((a, b) => a - b); return arr[arr.length >> 1]; };
+  const seed = (pred) => { const a = [[], [], []]; for (let v = 0; v < Hr; v += 2) for (let u = 0; u < Wr; u += 2) if (pred(u, v)){ const i = (v * Wr + u) * 3; a[0].push(L3[i]); a[1].push(L3[i + 1]); a[2].push(L3[i + 2]); } return a[0].length ? a.map(med) : null; };
+  let cB = seed((u, v) => { const e = edgeDist(u, v); return e > 0.06 && e < 0.22; });
+  let cP = seed((u, v) => Math.abs(u - Wr / 2) < 0.15 * Wr && Math.abs(v - Hr / 2) < 0.15 * Hr);
+  if (!cB || !cP) throw new Error("Shim too small in the photo. Move the phone closer.");
+  const inner = new Uint8Array(N); for (let v = 0; v < Hr; v++) for (let u = 0; u < Wr; u++) inner[v * Wr + u] = edgeDist(u, v) > 0.03 ? 1 : 0;
+  let cls = new Uint8Array(N);
+  for (let it = 0; it < 8; it++){
+    const sB = [0, 0, 0], sP = [0, 0, 0]; let nB = 0, nP = 0;
+    for (let i = 0; i < N; i++){
+      if (!inner[i]){ cls[i] = 0; continue; }
+      const a = L3[i * 3], b = L3[i * 3 + 1], c = L3[i * 3 + 2];
+      const dB = (a - cB[0]) ** 2 + (b - cB[1]) ** 2 + (c - cB[2]) ** 2, dP = (a - cP[0]) ** 2 + (b - cP[1]) ** 2 + (c - cP[2]) ** 2;
+      if (dP < dB){ cls[i] = 1; sP[0] += a; sP[1] += b; sP[2] += c; nP++; } else { cls[i] = 0; sB[0] += a; sB[1] += b; sB[2] += c; nB++; }
+    }
+    if (!nB || !nP) break;
+    cB = sB.map(x => x / nB); cP = sP.map(x => x / nP);
+  }
+  const sep = Math.hypot(cB[0] - cP[0], cB[1] - cP[1], cB[2] - cP[2]);
+  let paint = morph(morph(cls, Wr, Hr, 1, false), Wr, Hr, 1, true);
+  paint = largestComponent(paint, Wr, Hr).mask;
+  paint = fillHoles(paint, Wr, Hr);
+
+  // 6. measurements
+  let area = 0, minU = Wr, maxU = -1, minV = Hr, maxV = -1, edgeHit = false;
+  const rowC = new Int32Array(Hr), colC = new Int32Array(Wr);
+  for (let v = 0; v < Hr; v++) for (let u = 0; u < Wr; u++) if (paint[v * Wr + u]){
+    area++; rowC[v]++; colC[u]++;
+    if (u < minU) minU = u; if (u > maxU) maxU = u; if (v < minV) minV = v; if (v > maxV) maxV = v;
+    if (edgeDist(u, v) < 0.035) edgeHit = true;
+  }
+  if (!area) throw new Error("No painted area found on the shim.");
+  const midVals = (arr, lo, hi) => { const s = []; const a = lo + Math.round(0.2 * (hi - lo)), b = hi - Math.round(0.2 * (hi - lo)); for (let i = a; i <= b; i++) s.push(arr[i]); return med(s); };
+  const Lin = midVals(rowC, minV, maxV) / ppi, Wmed = midVals(colC, minU, maxU) / ppi, Ain = area / (ppi * ppi);
+
+  // glare: very bright, low-chroma pixels in the brass margin band
+  let gl = 0, gt = 0;
+  for (let v = 0; v < Hr; v += 2) for (let u = 0; u < Wr; u += 2){ const e = edgeDist(u, v); if (e > 0.06 && e < 0.4 && !paint[v * Wr + u]){ gt++; const i = (v * Wr + u) * 3; if (L3[i] > 44 && Math.hypot(L3[i + 1], L3[i + 2]) < 20) gl++; } }
+
+  return { work, C, lines, Wr, Hr, ppi, rgb, paint, Ain, Lin, Weff: Ain / Lin, Wmed, bbox: [(maxU - minU + 1) / ppi, (maxV - minV + 1) / ppi],
+    sep, edgeHit, glare: gt ? gl / gt : 0, aspectErr, maxRms: Math.max(...lines.map(l => l.rms)), res: shimL / longPx, shimL, shimW, scaleSrc, dots, dotMiss,
+    frac: Ain / (shimL * shimW), ms: performance.now() - t0 };
+}
+
+/* ---------- rendering ---------- */
+let last = null, lastSource = null, lastLabel = "";
+function drawSource(r){
+  const cv = $("cvSrc"), k = Math.min(1, 900 / r.work.w);
+  cv.width = Math.round(r.work.w * k); cv.height = Math.round(r.work.h * k);
+  const x = cv.getContext("2d"); x.drawImage(r.work.canvas, 0, 0, cv.width, cv.height);
+  x.lineWidth = Math.max(2, cv.width / 300); x.strokeStyle = "#1fe08a"; x.beginPath();
+  r.C.forEach((p, i) => i ? x.lineTo(p[0] * k, p[1] * k) : x.moveTo(p[0] * k, p[1] * k)); x.closePath(); x.stroke();
+  x.fillStyle = "#1fe08a"; r.C.forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, x.lineWidth * 2.2, 0, 7); x.fill(); });
+  if (r.dots){ x.strokeStyle = "#ff3ea5"; r.dots.forEach(p => { x.beginPath(); x.arc(p[0] * k, p[1] * k, x.lineWidth * 6, 0, 7); x.stroke(); }); }
+}
+function drawRect(r){
+  const cv = $("cvRect"); cv.width = r.Wr; cv.height = r.Hr;
+  const x = cv.getContext("2d"), img = new ImageData(new Uint8ClampedArray(r.rgb), r.Wr, r.Hr), d = img.data, m = r.paint, W = r.Wr;
+  for (let i = 0; i < m.length; i++){
+    const o = i * 4, u = i % W;
+    const edge = m[i] && (u === 0 || u === W - 1 || !m[i - 1] || !m[i + 1] || !m[i - W] || !m[i + W]);
+    if (edge){ d[o] = 0; d[o + 1] = 230; d[o + 2] = 255; }
+    else if (m[i]){ d[o] = d[o] * 0.55; d[o + 1] = d[o + 1] * 0.55 + 90; d[o + 2] = d[o + 2] * 0.55 + 100; }
+  }
+  x.putImageData(img, 0, 0);
+}
+function chip(text, kind){ const s = document.createElement("span"); s.className = "chip " + kind; s.textContent = text; return s; }
+function render(r){
+  last = r;
+  $("rArea").innerHTML = r.Ain.toFixed(3) + "<small>in²</small>";
+  $("rL").innerHTML = r.Lin.toFixed(3) + "<small>in</small>";
+  $("rW").innerHTML = r.Weff.toFixed(3) + "<small>in</small>";
+  $("rRes").innerHTML = (r.res * 1000).toFixed(1) + "<small>mil/px</small>";
+  $("rNote").textContent = `Shim ${r.shimL.toFixed(3)} × ${r.shimW.toFixed(3)} in (${r.scaleSrc === "jig" ? "measured from jig dots" : "entered size"}). Width (for calculator) = area ÷ length. Median width ${r.Wmed.toFixed(3)} in, outer box ${r.bbox[0].toFixed(3)} × ${r.bbox[1].toFixed(3)} in. Analysed in ${Math.round(r.ms)} ms.`;
+  const ch = $("chips"); ch.textContent = "";
+  let issues = 0;
+  if (r.maxRms > 1.5){ ch.appendChild(chip(`Shim edge not straight (${r.maxRms.toFixed(1)} px): flatten the shim`, "warn")); issues++; }
+  if (r.scaleSrc === "jig") ch.appendChild(chip(`Scale from jig dots · shim measured ${r.shimL.toFixed(3)} × ${r.shimW.toFixed(3)} in`, "ok"));
+  else if (settings.useJig){ ch.appendChild(chip(r.dotMiss || "Jig dots not found. Using the entered shim size.", "warn")); issues++; }
+  if (r.scaleSrc === "jig" && (r.shimL < 5.5 || r.shimL > 6.5 || r.shimW < 2.0 || r.shimW > 2.9)){ ch.appendChild(chip("Measured shim size looks wrong: check jig dot spacing in Settings", "bad")); issues++; }
+  if (Math.abs(r.aspectErr) > 0.08){ ch.appendChild(chip(`Shape off by ${(r.aspectErr * 100).toFixed(0)}%: check shim size setting or phone angle`, "warn")); issues++; }
+  if (r.sep < 15){ ch.appendChild(chip(`Low paint/brass contrast (${r.sep.toFixed(0)})`, "bad")); issues++; }
+  else if (r.sep < 25){ ch.appendChild(chip(`Moderate paint/brass contrast (${r.sep.toFixed(0)})`, "warn")); issues++; }
+  if (r.glare > 0.04){ ch.appendChild(chip(`Glare on brass (${(r.glare * 100).toFixed(0)}% of margin): use diffuse light`, "warn")); issues++; }
+  if (r.edgeHit){ ch.appendChild(chip("Paint reaches the shim edge: check the tape line", "warn")); issues++; }
+  if (r.frac < 0.2 || r.frac > 0.85){ ch.appendChild(chip(`Painted share ${(r.frac * 100).toFixed(0)}% looks unusual`, "warn")); issues++; }
+  if (r.res > 0.006){ ch.appendChild(chip(`Low resolution (${(r.res * 1000).toFixed(1)} mil/px): move closer`, "warn")); issues++; }
+  if (!issues) ch.appendChild(chip(`Good measurement · contrast ${r.sep.toFixed(0)} · edge fit ${r.maxRms.toFixed(2)} px`, "ok"));
+  drawSource(r); drawRect(r); calcDFT();
+}
+function setStatus(t){ $("status").textContent = t; }
+async function measure(source, label){
+  lastSource = source; lastLabel = label;
+  setStatus("Measuring…"); await new Promise(r => setTimeout(r, 30));
+  try { const r = analyze(source); render(r); setStatus(label + " · measured"); }
+  catch (e){ last = null; $("chips").textContent = ""; $("chips").appendChild(chip(e.message, "bad"));
+    ["rArea","rL","rW","rRes"].forEach(id => $(id).textContent = "—"); setStatus(label + " · not measured"); calcDFT(); }
+}
+async function onFile(ev){
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = "";
+  if (!f) return;
+  setStatus("Loading photo… (" + Math.round(f.size / 1024) + " KB, " + (f.type || "unknown type") + ")");
+  try {
+    let bmp;
+    try { bmp = await createImageBitmap(f, { imageOrientation: "from-image" }); }
+    catch { bmp = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("That photo format could not be opened (" + (f.type || f.name || "unknown type") + "). On iPhone set Settings > Camera > Formats > Most Compatible, or take the photo with the Measure shim button.")); im.src = URL.createObjectURL(f); }); }
+    $("sampleTag").hidden = true;
+    measure(bmp, "Photo " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+  } catch (e){ showErr(e.message || "That file could not be opened."); }
+}
+$("cam").addEventListener("change", onFile); $("pick").addEventListener("change", onFile);
+
+/* ---------- DFT ---------- */
+let dftNow = null;
+function calcDFT(){
+  const W = parseFloat($("wpg").value), Sraw = parseFloat($("sol").value), S = Sraw > 1 ? Sraw / 100 : Sraw;
+  let bare = parseFloat($("bare").value); const pw = parseFloat($("painted").value), mic = parseFloat($("mic").value);
+  const bareCalc = !(bare > 0); const sL = last && last.scaleSrc === "jig" ? last.shimL : settings.L, sW = last && last.scaleSrc === "jig" ? last.shimW : settings.W;
+  if (bareCalc) bare = sL * sW * settings.T * 139.78;
+  dftNow = null; $("addLog").disabled = !last;
+  if (!last){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Measure a shim first."; return; }
+  if (!(W > 0) || !(S > 0)){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Enter W and % solids for this color."; return; }
+  if (!(pw > 0)){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Enter the shim + dry paint weight. Area is ready."; return; }
+  const m = pw - bare, VS = 1 - W * (1 - S) / 8.34, rho = W * S / VS * 0.119826;
+  if (m <= 0 || VS <= 0){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = `Paint weight comes out ${m.toFixed(4)} g. Check the weights${bareCalc ? " or weigh the bare shim" : ""}.`; return; }
+  const dft = 1000 / 16.387064 * m / (rho * last.Ain);
+  dftNow = { m, rho, dft, bare, bareCalc, mic: mic > 0 ? mic : null };
+  $("dftOut").textContent = dft.toFixed(2) + " mils";
+  $("dftMeta").textContent = (bareCalc ? `bare ${bare.toFixed(4)} g calculated (${sL.toFixed(3)}×${sW.toFixed(3)}×${settings.T} in brass; weigh it for best accuracy) · ` : "") + `paint ${m.toFixed(4)} g · ρ ${rho.toFixed(3)} g/cm³ · area ${last.Ain.toFixed(3)} in²` + (dftNow.mic ? ` · Mic − Weight ${(dftNow.mic - dft >= 0 ? "+" : "")}${(dftNow.mic - dft).toFixed(2)}` : "");
+}
+
+/* ---------- log ---------- */
+let log = store.get("sv_log", []);
+const fmt = (v, d) => v == null || isNaN(v) ? "" : Number(v).toFixed(d);
+function renderLog(){
+  const tb = $("logBody"); tb.textContent = "";
+  if (!log.length){ const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 10; td.style.cssText = "text-align:left;color:var(--muted);font-family:var(--sans)"; td.textContent = "No shims logged yet. Measure a shim, enter its weights, then tap Add to log."; tr.appendChild(td); tb.appendChild(tr); return; }
+  log.slice().reverse().forEach(e => {
+    const tr = document.createElement("tr");
+    const cells = [new Date(e.t).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }), e.color + (e.id ? " · " + e.id : ""),
+      fmt(e.area, 3), fmt(e.L, 3), fmt(e.W, 3), fmt(e.m, 4), fmt(e.dft, 2), fmt(e.mic, 2), e.mic != null && e.dft != null ? (e.mic - e.dft >= 0 ? "+" : "") + fmt(e.mic - e.dft, 2) : ""];
+    cells.forEach(c => { const td = document.createElement("td"); td.textContent = c; tr.appendChild(td); });
+    const td = document.createElement("td"); const b = document.createElement("button"); b.className = "btn small"; b.type = "button"; b.textContent = "Copy";
+    b.addEventListener("click", () => copyText(tsv([e]), b)); td.appendChild(b); tr.appendChild(td); tb.appendChild(tr);
+  });
+}
+function tsv(rows){ return rows.map(e => [new Date(e.t).toLocaleString(), e.color, e.id || "", fmt(e.bare, 4), fmt(e.painted, 4), fmt(e.m, 4), fmt(e.L, 3), fmt(e.W, 3), fmt(e.area, 3), fmt(e.dft, 2), fmt(e.mic, 2), e.mic != null && e.dft != null ? fmt(e.mic - e.dft, 2) : ""].join("\t")).join("\n"); }
+const HEAD = ["Date/time","Color","Shim ID","Bare weight (g)","Painted weight (g)","Paint weight (g)","Painted length (in)","Width for calculator (in)","Area (in2)","Gravimetric DFT (mils)","Micrometer avg (mils)","Mic - Weight (mils)"];
+async function copyText(text, btn){
+  const old = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+  catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); btn.textContent = "Copied"; } catch { btn.textContent = "Select failed"; } ta.remove(); }
+  setTimeout(() => btn.textContent = old, 1500);
+}
+$("addLog").addEventListener("click", () => {
+  if (!last) return;
+  const pw = parseFloat($("painted").value), bare = parseFloat($("bare").value);
+  log.push({ t: Date.now(), color: sel.value, id: $("shimId").value.trim(), area: last.Ain, L: last.Lin, W: last.Weff,
+    bare: dftNow ? dftNow.bare : (bare > 0 ? bare : null), painted: pw > 0 ? pw : null, m: dftNow ? dftNow.m : null, dft: dftNow ? dftNow.dft : null, mic: dftNow ? dftNow.mic : (parseFloat($("mic").value) || null) });
+  store.set("sv_log", log); renderLog();
+  ["bare","painted","mic","shimId"].forEach(id => $(id).value = ""); calcDFT();
+  $("addLog").textContent = "Logged ✓"; setTimeout(() => $("addLog").textContent = "Add to log", 1400);
+});
+$("copyAll").addEventListener("click", e => copyText(HEAD.join("\t") + "\n" + tsv(log), e.currentTarget));
+let clearArmed = false;
+$("clearLog").addEventListener("click", () => {
+  if (!log.length) return;
+  if (!clearArmed){ clearArmed = true; $("clearLog").textContent = "Tap again to clear " + log.length; setTimeout(() => { clearArmed = false; $("clearLog").textContent = "Clear"; }, 3000); return; }
+  log = []; store.set("sv_log", log); renderLog(); clearArmed = false; $("clearLog").textContent = "Clear";
+});
+renderLog();
+$("dlCsv").hidden = false;
+$("dlCsv").addEventListener("click", async () => {
+  if (!log.length) return;
+  const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const csv = [HEAD.join(",")].concat(tsv(log).split("\n").map(l => l.split("\t").map(q).join(","))).join("\n");
+  const file = new File([csv], "shim-vision-log.csv", { type: "text/csv" });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Shim Vision log" }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  const url = URL.createObjectURL(file), link = document.createElement("a"); link.href = url; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
+/* ---------- live camera: auto-trigger like a vision sensor ---------- */
+let stream = null, liveTimer = null, armed = true, hist = [];
+const probe = document.createElement("canvas");
+const setLive = t => { $("liveMsg").textContent = t; };
+async function startLive(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ showErr("This browser cannot open the live camera. Use Measure shim instead."); return; }
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 3840 }, height: { ideal: 2160 } } }); }
+  catch (e){ showErr("Camera not available: " + (e.message || e.name) + ". Allow camera access, or use Measure shim."); return; }
+  const v = $("video"); v.srcObject = stream; $("liveBox").hidden = false; $("liveBtn").textContent = "■ Stop live";
+  try { await v.play(); } catch (e) {}
+  try { const t = stream.getVideoTracks()[0], c = t.getCapabilities ? t.getCapabilities() : {}; if (c.focusMode && c.focusMode.includes("continuous")) await t.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (e) {}
+  armed = true; hist = []; setLive("Place a shim in the jig"); liveTimer = setInterval(liveTick, 350);
+  try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) {}
+}
+function stopLive(){
+  clearInterval(liveTimer); liveTimer = null;
+  if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
+  $("liveBox").hidden = true; $("liveBtn").textContent = "● Live auto-measure";
+}
+$("liveBtn").addEventListener("click", () => stream ? stopLive() : startLive());
+document.addEventListener("visibilitychange", () => { if (document.hidden && stream) stopLive(); });
+function liveTick(){
+  const v = $("video"); if (!v.videoWidth) return;
+  const k = 240 / Math.max(v.videoWidth, v.videoHeight); probe.width = Math.round(v.videoWidth * k); probe.height = Math.round(v.videoHeight * k);
+  const x = probe.getContext("2d", { willReadFrequently: true }); x.drawImage(v, 0, 0, probe.width, probe.height);
+  const d = x.getImageData(0, 0, probe.width, probe.height).data; let n = 0, sx = 0, sy = 0;
+  for (let i = 0; i < d.length; i += 4) if (isBrassPrior(d[i], d[i + 1], d[i + 2])){ n++; const p = i / 4; sx += p % probe.width; sy += (p / probe.width) | 0; }
+  const frac = n / (probe.width * probe.height);
+  if (frac < 0.04){ hist = []; armed = true; setLive("Place a shim in the jig"); return; }
+  if (!armed){ setLive("Measured. Lift the shim out to measure the next one."); return; }
+  hist.push([sx / n, sy / n, frac]); if (hist.length > 4) hist.shift();
+  const h0 = hist[0], stable = hist.length === 4 && hist.every(h => Math.hypot(h[0] - h0[0], h[1] - h0[1]) < 1.5 && Math.abs(h[2] - h0[2]) < 0.05 * h0[2]);
+  if (!stable){ setLive("Shim found. Hold still…"); return; }
+  armed = false; setLive("Measuring…");
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
+  $("sampleTag").hidden = true;
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+  measure(c, "Live " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })).then(() => setLive("Measured. Lift the shim out to measure the next one."));
+}
+
+
+/* ---------- synthetic sample so the page opens working ---------- */
+function makeSample(){
+  const c = document.createElement("canvas"); c.width = 2400; c.height = 1800;
+  const x = c.getContext("2d");
+  x.fillStyle = "#9da3a8"; x.fillRect(0, 0, 2400, 1800);
+  const ppi = 230, Lp = 6.008 * ppi, Wp = 2.370 * ppi;
+  x.save(); x.translate(1200, 900); x.rotate(2.2 * Math.PI / 180);
+  x.fillStyle = "#c6cacd"; x.fillRect(-4.5 * ppi, -2.5 * ppi, 9 * ppi, 5 * ppi);
+  x.fillStyle = "#111"; [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, b]) => { x.beginPath(); x.arc(a * 3.5 * ppi, b * 1.75 * ppi, 0.125 * ppi, 0, 7); x.fill(); });
+  x.translate(0.06 * ppi, 0.04 * ppi);
+  const g = x.createLinearGradient(-Lp / 2, -Wp / 2, Lp / 2, Wp / 2); g.addColorStop(0, "#c9a24a"); g.addColorStop(1, "#b48a36");
+  x.fillStyle = g; x.fillRect(-Lp / 2, -Wp / 2, Lp, Wp);
+  const pL = 5.16 * ppi, pW = 1.65 * ppi, ox = 0.02 * ppi, oy = -0.01 * ppi;
+  x.fillStyle = "#4b5456"; x.beginPath();
+  const j = (t, a, b) => (0.018 * Math.sin(t * a) + 0.01 * Math.sin(t * b + 1.3)) * ppi;
+  for (let i = 0; i <= 200; i++){ const t = i / 200, X = -pL / 2 + t * pL + ox; const Y = -pW / 2 + oy + j(t * 40, 3.1, 7.7); i ? x.lineTo(X, Y) : x.moveTo(X, Y); }
+  for (let i = 0; i <= 80; i++){ const t = i / 80, Y = -pW / 2 + t * pW + oy; x.lineTo(pL / 2 + ox + j(t * 25, 4.3, 9.1), Y); }
+  for (let i = 0; i <= 200; i++){ const t = 1 - i / 200, X = -pL / 2 + t * pL + ox; x.lineTo(X, pW / 2 + oy + j(t * 40, 2.7, 6.3)); }
+  for (let i = 0; i <= 80; i++){ const t = 1 - i / 80, Y = -pW / 2 + t * pW + oy; x.lineTo(-pL / 2 + ox + j(t * 25, 3.7, 8.3), Y); }
+  x.closePath(); x.fill();
+  x.fillStyle = "#1c1c1c"; x.font = "600 70px sans-serif"; x.fillText("2.7", -Lp / 2 + 30, -Wp / 2 + 95); x.fillText("2.6", Lp / 2 - 150, Wp / 2 - 25);
+  x.restore();
+  const id = x.getImageData(0, 0, 2400, 1800), d = id.data;
+  let s = 12345; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < d.length; i += 4){ const nz = (rnd() - 0.5) * 14; d[i] += nz; d[i + 1] += nz; d[i + 2] += nz; }
+  x.putImageData(id, 0, 0);
+  return c;
+}
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+measure(makeSample(), "Sample (synthetic shim 6.008 × 2.370 in on jig, true area ≈ 8.514 in²)");
+})();
+</script>
+
+</body>
+</html>
