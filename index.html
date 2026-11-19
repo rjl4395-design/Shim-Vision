@@ -62,6 +62,9 @@ h2{font-size:.78rem;margin:0;font-weight:600;text-transform:uppercase;letter-spa
 .readout .v{font-family:var(--mono);font-size:1.45rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 .readout .v small{font-size:.75rem;color:var(--display-dim);margin-left:4px}
 .readout .main .v{font-size:2.1rem;color:#f3c75f}
+.readout .dftcell .v{color:#7fe0a8}
+#rShim{font-size:1.15rem;line-height:2.1rem}
+.readout .dftcell .v.wait{font-size:.95rem;color:var(--display-dim);white-space:normal;font-family:var(--sans)}
 .readout .note{grid-column:1/-1;font-size:.78rem;color:var(--display-dim);font-family:var(--mono)}
 @media (max-width:620px){.readout{grid-template-columns:repeat(2,minmax(0,1fr))}.readout .main{grid-column:1/-1}}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -127,7 +130,11 @@ details p,details li{font-size:.85rem;color:var(--muted)}
     <div class="cell main"><span class="k">Painted area</span><span class="v" id="rArea">—</span></div>
     <div class="cell"><span class="k">Painted length</span><span class="v" id="rL">—</span></div>
     <div class="cell"><span class="k">Width (for calculator)</span><span class="v" id="rW">—</span></div>
+    <div class="cell main dftcell"><span class="k">DFT by weight</span><span class="v" id="rDFT">—</span></div>
+    <div class="cell"><span class="k">Paint weight</span><span class="v" id="rPaint">—</span></div>
+    <div class="cell"><span class="k" id="rBareK">Bare shim weight</span><span class="v" id="rBare">—</span></div>
     <div class="cell"><span class="k">Resolution</span><span class="v" id="rRes">—</span></div>
+    <div class="cell"><span class="k">Shim size</span><span class="v" id="rShim">—</span></div>
     <div class="note" id="rNote">Width (for calculator) = area ÷ length, so L × W in the Quick Calculator equals the measured area, ragged tape edge included.</div>
   </section>
 
@@ -628,6 +635,7 @@ function render(r){
   $("rL").innerHTML = r.Lin.toFixed(3) + "<small>in</small>";
   $("rW").innerHTML = r.Weff.toFixed(3) + "<small>in</small>";
   $("rRes").innerHTML = (r.res * 1000).toFixed(1) + "<small>mil/px</small>";
+  $("rShim").innerHTML = r.shimL.toFixed(3) + "×" + r.shimW.toFixed(3) + "<small>in</small>";
   $("rNote").textContent = `Shim ${r.shimL.toFixed(3)} × ${r.shimW.toFixed(3)} in (${r.scaleSrc === "jig" ? "measured from jig dots" : "entered size"}). Width (for calculator) = area ÷ length. Median width ${r.Wmed.toFixed(3)} in, outer box ${r.bbox[0].toFixed(3)} × ${r.bbox[1].toFixed(3)} in. Analysed in ${Math.round(r.ms)} ms.`;
   const ch = $("chips"); ch.textContent = "";
   let issues = 0;
@@ -675,6 +683,7 @@ function calcDFT(){
   const bareCalc = !(bare > 0); const sL = last && last.scaleSrc === "jig" ? last.shimL : settings.L, sW = last && last.scaleSrc === "jig" ? last.shimW : settings.W;
   if (bareCalc) bare = sL * sW * settings.T * 139.78;
   dftNow = null; $("addLog").disabled = !last;
+  const rd = $("rDFT"); rd.textContent = "Enter the painted weight below"; rd.className = "v wait"; $("rPaint").textContent = "—"; $("rBare").textContent = "—"; $("rBareK").textContent = "Bare shim weight";
   if (!last){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Measure a shim first."; return; }
   if (!(W > 0) || !(S > 0)){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Enter W and % solids for this color."; return; }
   if (!(pw > 0)){ $("dftOut").textContent = "— mils"; $("dftMeta").textContent = "Enter the shim + dry paint weight. Area is ready."; return; }
@@ -683,6 +692,9 @@ function calcDFT(){
   const dft = 1000 / 16.387064 * m / (rho * last.Ain);
   dftNow = { m, rho, dft, bare, bareCalc, mic: mic > 0 ? mic : null };
   $("dftOut").textContent = dft.toFixed(2) + " mils";
+  rd.className = "v"; rd.innerHTML = dft.toFixed(2) + "<small>mils</small>";
+  $("rPaint").innerHTML = m.toFixed(4) + "<small>g</small>";
+  $("rBare").innerHTML = bare.toFixed(4) + "<small>g</small>"; $("rBareK").textContent = bareCalc ? "Bare weight (calculated)" : "Bare weight (weighed)";
   $("dftMeta").textContent = (bareCalc ? `bare ${bare.toFixed(4)} g calculated (${sL.toFixed(3)}×${sW.toFixed(3)}×${settings.T} in brass; weigh it for best accuracy) · ` : "") + `paint ${m.toFixed(4)} g · ρ ${rho.toFixed(3)} g/cm³ · area ${last.Ain.toFixed(3)} in²` + (dftNow.mic ? ` · Mic − Weight ${(dftNow.mic - dft >= 0 ? "+" : "")}${(dftNow.mic - dft).toFixed(2)}` : "");
 }
 
