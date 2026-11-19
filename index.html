@@ -186,6 +186,19 @@ details p,details li{font-size:.85rem;color:var(--muted)}
         <label for="dotX">Jig dot spacing, long (in)<input id="dotX" type="number" step="0.001" value="7.000"></label>
         <label for="dotY">Jig dot spacing, short (in)<input id="dotY" type="number" step="0.001" value="3.500"></label>
       </div>
+      <div class="panel" style="margin-top:12px;padding:12px;gap:8px">
+        <h2>Calibrate jig with a reference shim</h2>
+        <p class="hint">Caliper one shim's outer length and width. Measure it on the jig, tap Add calibration photo, then move the shim slightly and repeat 2–3 times. The app sets the dot spacing so that shim reads its true size. No need to measure the dots.</p>
+        <div class="grid">
+          <label for="refL">Reference shim length (in)<input id="refL" type="number" step="0.001" value="6.008"></label>
+          <label for="refW">Reference shim width (in)<input id="refW" type="number" step="0.001" value="2.370"></label>
+        </div>
+        <div class="row">
+          <button class="btn small" id="calAdd" type="button">Add calibration photo</button>
+          <button class="btn small" id="calReset" type="button">Start over</button>
+        </div>
+        <p class="hint" id="calMsg">No calibration photos yet.</p>
+      </div>
       <ul>
         <li>The shim's length and width set the scale. Measure a batch with calipers and enter the true size; a 0.01" error here is a 0.2% area error.</li>
         <li>Mount the phone parallel to the shim on the 1× lens, about 8 to 9 in above it, with the shim's long side along the phone's long side. Turn off flash, portrait mode and macro auto-switch.</li>
@@ -236,7 +249,7 @@ const settings = store.get("sv_settings", { L: 6.000, W: 2.510, ppi: 250 });
 settings.T = settings.T || 0.003;
 if (settings.useJig === undefined) settings.useJig = true;
 settings.DX = settings.DX || 7.0; settings.DY = settings.DY || 3.5;
-$("useJig").checked = settings.useJig; $("dotX").value = settings.DX.toFixed(3); $("dotY").value = settings.DY.toFixed(3);
+$("useJig").checked = settings.useJig; $("dotX").value = settings.DX.toFixed(4); $("dotY").value = settings.DY.toFixed(4);
 ["useJig","dotX","dotY"].forEach(id => $(id).addEventListener("change", () => {
   settings.useJig = $("useJig").checked; settings.DX = parseFloat($("dotX").value) || 7; settings.DY = parseFloat($("dotY").value) || 3.5;
   store.set("sv_settings", settings); if (lastSource) measure(lastSource, lastLabel);
@@ -250,6 +263,27 @@ $("shimL").value = settings.L.toFixed(3); $("shimW").value = settings.W.toFixed(
   store.set("sv_settings", settings);
   if (lastSource) measure(lastSource, lastLabel);
 }));
+
+/* ---------- reference-shim calibration ---------- */
+let calSamples = [];
+if (settings.refL) $("refL").value = settings.refL.toFixed(3);
+if (settings.refW) $("refW").value = settings.refW.toFixed(3);
+["refL","refW"].forEach(id => $(id).addEventListener("change", () => { settings.refL = parseFloat($("refL").value) || null; settings.refW = parseFloat($("refW").value) || null; store.set("sv_settings", settings); }));
+$("calReset").addEventListener("click", () => { calSamples = []; $("calMsg").textContent = "Calibration photos cleared. Dot spacing stays as it is."; });
+$("calAdd").addEventListener("click", () => {
+  const rL = parseFloat($("refL").value), rW = parseFloat($("refW").value), msg = $("calMsg");
+  if (!(rL > 0) || !(rW > 0)){ msg.textContent = "Enter the reference shim's calipered length and width first."; return; }
+  if (!last || last.scaleSrc !== "jig"){ msg.textContent = "Measure the reference shim on the jig first. The result needs the green \"Scale from jig dots\" chip."; return; }
+  const dx = settings.DX * rL / last.shimL, dy = settings.DY * rW / last.shimW;
+  if (Math.abs(rL / last.shimL - 1) > 0.05 || Math.abs(rW / last.shimW - 1) > 0.05){ msg.textContent = `The photo reads ${last.shimL.toFixed(3)} × ${last.shimW.toFixed(3)} in, more than 5% from the reference size. Check the reference numbers or that the right shim is on the jig.`; return; }
+  calSamples.push([dx, dy]);
+  const n = calSamples.length, mDX = calSamples.reduce((a, c) => a + c[0], 0) / n, mDY = calSamples.reduce((a, c) => a + c[1], 0) / n;
+  const sd = k => n < 2 ? 0 : Math.sqrt(calSamples.reduce((a, c) => a + (c[k] - (k ? mDY : mDX)) ** 2, 0) / (n - 1));
+  settings.DX = mDX; settings.DY = mDY; store.set("sv_settings", settings);
+  $("dotX").value = mDX.toFixed(4); $("dotY").value = mDY.toFixed(4);
+  msg.textContent = `Photo ${n} added. Dot spacing set to ${mDX.toFixed(4)} × ${mDY.toFixed(4)} in` + (n > 1 ? ` (photo-to-photo spread ±${sd(0).toFixed(4)} / ±${sd(1).toFixed(4)} in).` : ". Add 2–3 more photos, moving the shim a little each time.");
+  if (lastSource) measure(lastSource, lastLabel);
+});
 
 /* ---------- color math ---------- */
 const LIN = new Float32Array(256);
